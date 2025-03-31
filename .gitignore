@@ -1,0 +1,13 @@
+# Ignore virtual environment
+/venv/
+
+# Ignore output images
+/output/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Other system files (optional)
+.DS_Store

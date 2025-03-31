@@ -1,0 +1,8 @@
+INFO: Starting asynchronous scraping process.
+INFO: Loaded removed words from removed_words.txt
+INFO: Loaded cached keywords.
+INFO: Scraped 26 index pages for keywords.
+INFO: Scraped 268 faculty pages for research descriptions.
+INFO: Cached scraped data to output/ directory.
+INFO: Generating word clouds.
+INFO: Scraping process completed.
