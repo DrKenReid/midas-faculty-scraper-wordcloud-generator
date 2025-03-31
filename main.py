@@ -1,12 +1,71 @@
 #!/usr/bin/env python3
 """
 UMich Faculty Research Interests Scraper & Word Cloud Generator
+================================================================
 
-This asynchronous Python script scrapes research interests from the University of
-Michigan affiliated faculty pages, cleans the text, and generates eight word clouds.
-For each light/dark mode, two word clouds are generated for horizontal-only orientation
-and two for mixed orientation, with one word cloud using keywords and one using
-descriptions. A summary table is then printed using the tabulate library.
+Overview:
+---------
+This asynchronous Python script scrapes research interests from the University of Michigan MIDAS
+affiliated faculty pages, cleans the scraped text, and generates eight word clouds based on
+different configurations. The data is gathered from two sources:
+  1. Keywords (short descriptions) from the index pages.
+  2. Full research descriptions from individual faculty pages.
+
+The script is structured as follows:
+
+1. **Constants and Setup**
+   - Global constants are defined (e.g., CACHE_KEYWORDS, CACHE_DESCRIPTIONS, BASE_URL, etc.).
+   - Logging is configured.
+   - NLTK stopwords are downloaded, and custom common terms are loaded from a file.
+
+2. **Scraping Functions**
+   - `fetch_page(session, url, retries, delay)`: Fetches HTML content from a URL asynchronously with retry logic.
+   - `scrape_keywords(session, verbose)`: Iterates over letters A–Z and paginates through each letter’s pages
+     (using the &_paged parameter) until a "Nothing found." message is detected or no keyword paragraphs exist.
+     Two nested progress bars show overall alphabetical progress and page-by-page progress for each letter.
+   - `parse_faculty_links(html)`: Parses faculty profile links from an HTML page.
+   - `scrape_descriptions_for_letter(session, letter)`: For a given letter, iterates over paginated pages to
+     scrape full research descriptions from each faculty profile.
+   - `scrape_all_descriptions(session)`: Iterates over letters A–Z to gather research descriptions.
+
+3. **Cleaning Function**
+   - `clean_text(text, remove_common_terms, remove_stop)`: Cleans the scraped text by converting it to lowercase,
+     removing custom domain-specific terms, NLTK stopwords, and filtering out short words (less than 3 characters).
+
+4. **Word Cloud Generation**
+   - `generate_wordcloud(text, prefer_horizontal, dark_mode, filename)`: Generates and saves a word cloud image
+     from the provided text, using the specified orientation (horizontal only or mixed) and color mode (dark/light).
+
+5. **Main Asynchronous Function**
+   - `main_async()`: Coordinates the entire workflow:
+       a. Loads cached data (if available) or scrapes fresh data.
+       b. Cleans the texts.
+       c. Generates eight word clouds for each combination of:
+          - Mode: dark/light
+          - Orientation: horizontal-only (prefer_horizontal=1.0) and mixed (prefer_horizontal=0.5)
+          - Data Source: keywords and descriptions.
+       d. Displays summary tables with metrics and generated filenames.
+       
+6. **Script Entry Point**
+   - `main()`: The main entry point that runs the asynchronous workflow using asyncio.
+
+Usage:
+------
+Run the script as a standalone file:
+    python <script_name>.py
+
+Dependencies:
+-------------
+Ensure the following packages are installed:
+    aiohttp, beautifulsoup4, nltk, wordcloud, tqdm, tabulate
+
+Author:
+-------
+Ken Reid
+
+License:
+--------
+MIT License
 """
 
 import os
@@ -17,7 +76,6 @@ import logging
 import aiohttp
 from bs4 import BeautifulSoup
 from wordcloud import WordCloud
-import matplotlib.pyplot as plt  # Imported for potential display purposes
 import nltk
 from nltk.corpus import stopwords
 from tqdm import tqdm
@@ -29,7 +87,7 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-# Constants
+# Constants and global variables
 CACHE_KEYWORDS = "keywords.txt"
 CACHE_DESCRIPTIONS = "descriptions.txt"
 COMMON_TERMS_FILE = "removed_words.txt"
@@ -60,13 +118,13 @@ async def fetch_page(session: aiohttp.ClientSession, url: str,
     Asynchronously fetches the HTML content of the given URL with retry logic.
 
     Args:
-        session: The aiohttp client session.
-        url: The URL to fetch.
-        retries: Number of retries in case of failure.
-        delay: Delay in seconds between retries.
+        session (aiohttp.ClientSession): The aiohttp client session.
+        url (str): The URL to fetch.
+        retries (int): Number of retries in case of failure.
+        delay (float): Delay in seconds between retries.
 
     Returns:
-        The HTML content as a string if successful; otherwise, an empty string.
+        str: The HTML content as a string if successful; otherwise, an empty string.
     """
     for attempt in range(retries):
         try:
@@ -82,30 +140,65 @@ async def fetch_page(session: aiohttp.ClientSession, url: str,
     return ""
 
 
-async def scrape_keywords(session: aiohttp.ClientSession) -> str:
+async def scrape_keywords(session: aiohttp.ClientSession, verbose: bool = False) -> str:
     """
-    Scrapes keywords (short descriptions) from A-Z pages.
+    Scrapes keywords (short descriptions) from all paginated A–Z pages.
+
+    For each alphabetical letter, iterates over pages (using the &_paged
+    parameter) until it finds a <p class="facetwp-no-results"> element whose text
+    (case-insensitively) includes "nothing found" or until no keyword paragraphs are present.
+    
+    Two nested progress bars are displayed:
+      - An outer bar for the alphabetical letters.
+      - An inner bar for the pages processed for each letter.
 
     Args:
-        session: The aiohttp client session.
+        session (aiohttp.ClientSession): The aiohttp client session.
+        verbose (bool): If True, prints debug information.
 
     Returns:
-        A single string containing all scraped keywords.
+        str: A single string containing all scraped keywords.
     """
     texts = []
-    for letter in tqdm(string.ascii_uppercase, desc="Scraping keywords",
-                       unit="letter"):
-        url = f"{BASE_URL}?_last_name_a_z={letter}"
-        html = await fetch_page(session, url)
-        if html:
-            soup = BeautifulSoup(html, "html.parser")
-            paragraphs = soup.find_all("p", class_=re.compile("type-directory-subtitle"))
-            for p in paragraphs:
-                text = p.get_text(separator=" ", strip=True)
-                if text:
-                    texts.append(text)
-        else:
-            logging.warning(f"No content for letter {letter}")
+    # Outer progress bar for alphabetical letters.
+    for letter in tqdm(string.ascii_uppercase, desc="Alphabetical Letters", unit="letter"):
+        page = 1
+        # Inner progress bar for pages for this letter.
+        with tqdm(desc=f"Letter {letter} pages", unit="page", leave=False) as page_bar:
+            while True:
+                url = f"{BASE_URL}?_last_name_a_z={letter}&_paged={page}"
+                if verbose:
+                    print(f"Fetching URL: {url}")
+                html = await fetch_page(session, url)
+                if not html:
+                    if verbose:
+                        print("No HTML returned, breaking.")
+                    break
+
+                soup = BeautifulSoup(html, "html.parser")
+                no_results = soup.find("p", class_="facetwp-no-results")
+                if no_results:
+                    text_no = no_results.get_text(strip=True).lower()
+                    if verbose:
+                        print(f"Found no-results text: '{text_no}'")
+                    if "nothing found" in text_no:
+                        if verbose:
+                            print(f"Stopping pagination for letter {letter} at page {page}")
+                        break
+
+                paragraphs = soup.find_all("p", class_="type-directory-subtitle")
+                if not paragraphs:
+                    if verbose:
+                        print("No keyword paragraphs found, breaking.")
+                    break
+
+                for p in paragraphs:
+                    txt = p.get_text(separator=" ", strip=True)
+                    if txt:
+                        texts.append(txt)
+
+                page += 1
+                page_bar.update(1)
     return " ".join(texts)
 
 
@@ -114,10 +207,10 @@ def parse_faculty_links(html: str) -> list:
     Parses faculty profile links from the HTML content of a page.
 
     Args:
-        html: The HTML content as a string.
+        html (str): The HTML content as a string.
 
     Returns:
-        A list of URLs (strings) pointing to faculty profiles.
+        list: A list of URLs (strings) pointing to faculty profiles.
     """
     soup = BeautifulSoup(html, "html.parser")
     links = []
@@ -128,26 +221,30 @@ def parse_faculty_links(html: str) -> list:
     return links
 
 
-async def scrape_descriptions_for_letter(session: aiohttp.ClientSession,
-                                         letter: str) -> str:
+async def scrape_descriptions_for_letter(session: aiohttp.ClientSession, letter: str) -> str:
     """
-    Scrapes research descriptions from all faculty profiles for a given letter.
+    Scrapes research descriptions from all faculty profiles for a given letter, handling pagination.
+
+    For each alphabetical letter, increments the page number until no faculty links are found.
 
     Args:
-        session: The aiohttp client session.
-        letter: The letter of the alphabet to filter faculty pages.
+        session (aiohttp.ClientSession): The aiohttp client session.
+        letter (str): The letter of the alphabet to filter faculty pages.
 
     Returns:
-        A single string containing all research descriptions scraped for that letter.
+        str: A single string containing all research descriptions scraped for that letter.
     """
     collected = []
-    url = f"{BASE_URL}?_last_name_a_z={letter}"
-    html = await fetch_page(session, url)
-    if html:
+    page = 1
+    while True:
+        url = f"{BASE_URL}?_last_name_a_z={letter}&_paged={page}"
+        html = await fetch_page(session, url)
+        if not html:
+            break
         faculty_links = parse_faculty_links(html)
-        for link in tqdm(faculty_links,
-                         desc=f"Scraping descriptions for {letter}",
-                         leave=False):
+        if not faculty_links:
+            break
+        for link in tqdm(faculty_links, desc=f"Scraping descriptions for {letter} page {page}", leave=False):
             page_html = await fetch_page(session, link)
             if page_html:
                 soup = BeautifulSoup(page_html, "html.parser")
@@ -157,22 +254,25 @@ async def scrape_descriptions_for_letter(session: aiohttp.ClientSession,
                     collected.append(text)
                 else:
                     logging.warning(f"'dynamic-entry-content' not found on {link}")
+        page += 1
     return " ".join(collected)
 
 
 async def scrape_all_descriptions(session: aiohttp.ClientSession) -> str:
     """
-    Scrapes research descriptions from all A-Z pages.
+    Scrapes research descriptions from all paginated A–Z pages.
+
+    Iterates through each alphabetical letter and retrieves research descriptions
+    from all pages by incrementing the page number until no faculty links are found.
 
     Args:
-        session: The aiohttp client session.
+        session (aiohttp.ClientSession): The aiohttp client session.
 
     Returns:
-        A single string containing all research descriptions scraped.
+        str: A single string containing all research descriptions scraped.
     """
     texts = []
-    for letter in tqdm(string.ascii_uppercase, desc="Scraping descriptions",
-                       unit="letter"):
+    for letter in tqdm(string.ascii_uppercase, desc="Scraping descriptions", unit="letter"):
         letter_text = await scrape_descriptions_for_letter(session, letter)
         texts.append(letter_text)
     return " ".join(texts)
@@ -181,19 +281,18 @@ async def scrape_all_descriptions(session: aiohttp.ClientSession) -> str:
 # ---------------------------
 # Cleaning Function
 # ---------------------------
-def clean_text(text: str, remove_common_terms: bool = True,
-               remove_stop: bool = True) -> str:
+def clean_text(text: str, remove_common_terms: bool = True, remove_stop: bool = True) -> str:
     """
-    Cleans the given text by converting it to lowercase, removing common terms,
-    stopwords, and filtering out words with fewer than three characters.
+    Cleans the given text by converting it to lowercase, removing custom common terms,
+    NLTK stopwords, and filtering out words with fewer than three characters.
 
     Args:
-        text: The input text string.
-        remove_common_terms: Flag to remove domain-specific terms.
-        remove_stop: Flag to remove NLTK stopwords.
+        text (str): The input text string.
+        remove_common_terms (bool): Flag to remove domain-specific terms.
+        remove_stop (bool): Flag to remove NLTK stopwords.
 
     Returns:
-        The cleaned text as a single string.
+        str: The cleaned text as a single string.
     """
     text = text.lower()
     if remove_common_terms:
@@ -210,16 +309,15 @@ def clean_text(text: str, remove_common_terms: bool = True,
 # ---------------------------
 # WordCloud Generation Function
 # ---------------------------
-def generate_wordcloud(text: str, prefer_horizontal: float, dark_mode: bool,
-                       filename: str) -> None:
+def generate_wordcloud(text: str, prefer_horizontal: float, dark_mode: bool, filename: str) -> None:
     """
     Generates a word cloud image from the given text and saves it to a file.
 
     Args:
-        text: The input text used for generating the word cloud.
-        prefer_horizontal: The proportion of horizontal words.
-        dark_mode: Flag to determine background color (black for dark mode).
-        filename: The output file path where the image will be saved.
+        text (str): The input text used for generating the word cloud.
+        prefer_horizontal (float): The proportion of horizontal words (1.0 for horizontal only, 0.5 for mixed orientation).
+        dark_mode (bool): Flag to determine background color (black for dark mode, white for light mode).
+        filename (str): The output file path where the image will be saved.
     """
     background_color = "black" if dark_mode else "white"
     wc = WordCloud(width=800, height=400, background_color=background_color,
@@ -233,8 +331,17 @@ def generate_wordcloud(text: str, prefer_horizontal: float, dark_mode: bool,
 # ---------------------------
 async def main_async() -> None:
     """
-    Main asynchronous function that orchestrates scraping, cleaning, word cloud
-    generation, and displays a summary of the operations.
+    Main asynchronous function that orchestrates scraping, cleaning, word cloud generation,
+    and displays a summary of the operations.
+    
+    Workflow:
+      1. Load cached keywords and descriptions if available; otherwise, scrape fresh data.
+      2. Clean the scraped texts.
+      3. Generate word clouds for each combination of:
+           - Mode: dark and light.
+           - Orientation: horizontal-only (prefer_horizontal=1.0) and mixed (prefer_horizontal=0.5).
+           - Source: keywords and descriptions.
+      4. Print summary tables showing scraping metrics and generated image filenames.
     """
     # Load or scrape keywords
     if os.path.exists(CACHE_KEYWORDS):
@@ -266,8 +373,8 @@ async def main_async() -> None:
     keywords_word_count = len(cleaned_keywords.split())
     descriptions_word_count = len(cleaned_descriptions.split())
 
-    # Define configuration options
-    # For orientation: 'horizontal' (prefer_horizontal=1.0) or 'mixed' (prefer_horizontal=0.5)
+    # Define configuration options:
+    # For each mode (dark/light), orientation (horizontal/mixed), and source (keywords/descriptions)
     modes = [(True, "dark"), (False, "light")]
     orientations = [("horizontal", 1.0), ("mixed", 0.5)]
     sources = [("keywords", cleaned_keywords), ("descriptions", cleaned_descriptions)]
@@ -282,7 +389,8 @@ async def main_async() -> None:
                     OUTPUT_DIR, f"{source_name}_{orientation_name}_{mode_name}.png"
                 )
                 generate_wordcloud(text_content, prefer_horizontal, dark_mode, filename)
-                summary_files.append((mode_name, orientation_name, source_name, os.path.basename(filename)))
+                summary_files.append((mode_name, orientation_name, source_name,
+                                      os.path.basename(filename)))
 
     # Print a summary of scraping results
     summary_data = [
