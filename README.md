@@ -1,38 +1,37 @@
 # UMich Faculty Research Interests Scraper & Word Cloud Generator
 
-This Python script scrapes research interests from the University of Michigan affiliated faculty pages, cleans the text by converting it to lowercase and removing common DS-related terms (loaded from an external file), NLTK stopwords, and words shorter than three characters, and then generates four word clouds. The script scrapes both the main A–Z index pages for keywords/short descriptions and individual faculty pages for full research descriptions, and it saves the word cloud images without displaying them.
+This Python script scrapes research interests from the University of Michigan affiliated faculty pages, cleans the text by converting it to lowercase and removing common DS-related terms (loaded from an external file), NLTK stopwords, and words shorter than three characters, and then generates eight word clouds. The script scrapes both the main A–Z index pages for keywords/short descriptions and individual faculty pages for full research descriptions, and it saves the word cloud images without displaying them.
 
 ## Features
 
-* **Dual Data Sources:**\
+* **Dual Data Sources:**  
   Scrapes the main A–Z index pages for keywords/short descriptions and follows each faculty link to scrape full research descriptions.
 
-* **Text Cleaning:**\
+* **Text Cleaning:**  
   Converts all text to lowercase, removes common DS-related terms (loaded from `removed_words.txt`), filters out NLTK stopwords, and excludes words with fewer than 3 characters.
 
-* **Word Cloud Generation:**\
-  Automatically produces four word cloud images:
+* **Word Cloud Generation:**  
+  Automatically produces eight word cloud images:
+  
+  * For each **mode** (light and dark):
+    * **Horizontal Only:**  
+      - One word cloud from the keywords variant (using only horizontal orientation, `prefer_horizontal=1.0`)
+      - One word cloud from the descriptions variant (using only horizontal orientation, `prefer_horizontal=1.0`)
+    * **Mixed Orientation:**  
+      - One word cloud from the keywords variant (using mixed orientation, `prefer_horizontal=0.5`)
+      - One word cloud from the descriptions variant (using mixed orientation, `prefer_horizontal=0.5`)
 
-  * Two from the index (keywords) variant:
+* **Caching:**  
+  Saves scraped data to text files (`keywords.txt` and `descriptions.txt`) to avoid repeated scraping.
 
-    * Mixed orientation (vertical & horizontal, `prefer_horizontal=0.5`)
-
-    * Purely horizontal (`prefer_horizontal=1.0`)
-
-  * Two from the full research descriptions (deep-scrape) variant with the same orientation settings.
-
-* **Caching:**\
-  Saves scraped data to text files (`keywords.txt` and `descriptions.txt` in the `/output/` directory) to avoid repeated scraping.
-
-* **Output Handling:**\
+* **Output Handling:**  
   Word cloud images are saved to the `/output/` directory. The images are not displayed interactively.
 
 ## Installation
 
 ### Prerequisites
 
-* Python 3.7 or higher
-
+* Python 3.7 or higher  
 * pip
 
 ### Using a Virtual Environment (Recommended)
@@ -40,9 +39,9 @@ This Python script scrapes research interests from the University of Michigan af
 1. **Clone the repository:**
 
    ```bash
-   git clone https://github.com/yourusername/umich-faculty-scraper.git
-   cd umich-faculty-scraper
-   ```
+   git clone https://github.com/DrKenReid/midas-faculty-scraper-wordcloud-generator.git
+   cd midas-faculty-scraper-wordcloud-generator
+```
 
 2. **Create a virtual environment:**
 
@@ -92,16 +91,33 @@ The script will:
 
 2. Follow each faculty link to scrape full research descriptions.
 
-3. Clean the text (convert to lowercase, remove common DS terms from `removed_words.txt`, stopwords, and words shorter than 3 characters).
+3. Clean the text (convert to lowercase, remove common DS terms from `removed_words.txt`, NLTK stopwords, and words shorter than 3 characters).
 
-4. Generate and save four word clouds (two from the keywords variant and two from the descriptions variant) in the `/output/` directory.
+4. Generate and save eight word clouds:
+
+   * For **light mode** and **dark mode**:
+
+     * One word cloud (horizontal only) generated from keywords.
+
+     * One word cloud (horizontal only) generated from descriptions.
+
+     * One word cloud (mixed orientation) generated from keywords.
+
+     * One word cloud (mixed orientation) generated from descriptions.
 
 ## Configuration
 
-The following aspects can be configured directly in the `main()` function of `scraper.py`:
+The following aspects can be configured directly in the script:
 
-* **Dark Mode:**\
-  Set to `True` for a dark (black) background, or `False` for a white background.
+* **Dark/Light Mode:**\
+  The script generates word clouds for both dark mode (black background) and light mode (white background).
+
+* **Orientation:**\
+  Two orientation settings are used:
+
+  * **Horizontal Only:** (`prefer_horizontal=1.0`)
+
+  * **Mixed Orientation:** (`prefer_horizontal=0.5`)
 
 * **Removed Words List:**\
   Common DS-related terms are loaded from the external file `removed_words.txt`. Edit this file to update the list of terms to remove.
@@ -113,29 +129,35 @@ The following aspects can be configured directly in the `main()` function of `sc
 
   * `descriptions.txt`: Contains aggregated research descriptions from individual faculty pages.
 
-  If these files exist in the `/output/` directory, the script loads their content instead of scraping again. Delete or modify these files to force a new scrape.
+  If these files exist, the script loads their content instead of scraping again. Delete or modify these files to force a new scrape.
 
 ## Output
 
-* The generated word cloud images are saved to the `/output/` directory:
+* The generated word cloud images are saved to the `/output/` directory. Filenames follow the convention:
 
-  * `wordcloud_keywords_mixed.png`
+  * `keywords_horizontal_light.png`
 
-  * `wordcloud_keywords_horizontal.png`
+  * `keywords_mixed_light.png`
 
-  * `wordcloud_descriptions_mixed.png`
+  * `descriptions_horizontal_light.png`
 
-  * `wordcloud_descriptions_horizontal.png`
+  * `descriptions_mixed_light.png`
 
-* After processing, a colored summary table is printed showing the number of pages scraped and the word counts for each variant.
+  * `keywords_horizontal_dark.png`
+
+  * `keywords_mixed_dark.png`
+
+  * `descriptions_horizontal_dark.png`
+
+  * `descriptions_mixed_dark.png`
+
+* After processing, a summary table is printed showing the number of pages scraped and the word counts for each text variant.
 
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](https://chatgpt.com/c/LICENSE) file for details.
 
 ## Acknowledgements
-
-* [Requests](https://docs.python-requests.org/)
 
 * [Beautiful Soup](https://www.crummy.com/software/BeautifulSoup/)
 
@@ -144,3 +166,8 @@ This project is licensed under the MIT License. See the [LICENSE](https://chatgp
 * [NLTK](https://www.nltk.org/)
 
 * [Matplotlib](https://matplotlib.org/)
+
+* [tqdm](https://github.com/tqdm/tqdm)
+
+* [tabulate](https://pypi.org/project/tabulate/)
+
