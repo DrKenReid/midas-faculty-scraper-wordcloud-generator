@@ -19,3 +19,6 @@ model
 system
 method
 analysis
+use
+uses
+ing
