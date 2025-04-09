@@ -6,3 +6,11 @@ INFO: Scraped 268 faculty pages for research descriptions.
 INFO: Cached scraped data to output/ directory.
 INFO: Generating word clouds.
 INFO: Scraping process completed.
+2025-04-09 10:31:19,475 - INFO - Loaded keywords from cache.
+2025-04-09 10:31:19,477 - INFO - Loaded descriptions from cache.
+2025-04-09 10:34:35,617 - INFO - Loaded keywords from cache.
+2025-04-09 10:34:35,619 - INFO - Loaded descriptions from cache.
+2025-04-09 10:35:02,818 - INFO - Loaded keywords from cache.
+2025-04-09 10:35:02,820 - INFO - Loaded descriptions from cache.
+2025-04-09 10:45:00,610 - INFO - Loaded keywords from cache.
+2025-04-09 10:45:00,612 - INFO - Loaded descriptions from cache.

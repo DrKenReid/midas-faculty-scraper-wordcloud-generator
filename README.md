@@ -92,7 +92,7 @@ This Python script scrapes research interests from the University of Michigan af
 Run the script by executing:
 
 ```bash
-python scraper.py
+python main.py
 ```
 
 The script will:
